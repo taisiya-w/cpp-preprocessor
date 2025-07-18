@@ -76,7 +76,12 @@ bool Preprocess(const path& in_file, const path& out_file, const vector<path>& i
     if (!input.is_open()) {
         return false;
     }
+
     ofstream output(out_file);
+    if (!output.is_open()) {
+        return false;
+    }
+
     size_t line_number = 0;
     return Process(input, output, in_file, include_directories, line_number);
 }
