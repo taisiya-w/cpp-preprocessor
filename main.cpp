@@ -9,13 +9,77 @@
 
 using namespace std;
 using filesystem::path;
+using namespace filesystem;
 
 path operator""_p(const char* data, std::size_t sz) {
     return path(data, data + sz);
 }
 
-// напишите эту функцию
-bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories);
+bool Process(istream& input, ostream& output, const path& current_file, const vector<path>& include_directories, size_t& line_number) {
+    static regex local_reg(R"/(\s*#\s*include\s*"([^"]*)"\s*)/");
+    static regex system_reg(R"/(\s*#\s*include\s*<([^>]*)>\s*)/");
+
+    string line;
+    path current_directory = current_file.parent_path();
+
+    while (getline(input, line)) {
+        ++line_number;
+        smatch m;
+
+        path include_path;
+        vector<path> search_paths;
+        bool is_included = false;
+
+        if (regex_match(line, m, local_reg)) {
+            include_path = string(m[1]);
+            search_paths.push_back(current_directory);
+            search_paths.insert(search_paths.end(), include_directories.begin(), include_directories.end());
+            is_included = true;
+        }
+
+        if (regex_match(line, m, system_reg)) {
+            include_path = string(m[1]);
+            search_paths = include_directories;
+            is_included = true;
+        }
+
+        if (is_included) {
+            bool file_found = false;
+            for (const path& new_path : search_paths) {
+                path full_path = new_path / include_path;
+                ifstream include_file(full_path);
+                if (include_file.is_open()) {
+                    size_t current_number = 0;
+                    if (!Process(include_file, output, full_path, include_directories, current_number)) {
+                        return false;
+                    }
+                    file_found = true;
+                    break;
+                }
+            }
+
+            if (!file_found) {
+                cout << "unknown include file " << include_path.string() << " at file " << current_file.string() << " at line " << line_number << endl;
+                return false;
+            }
+
+        } else {
+            output << line << "\n";
+        }
+    }
+
+    return true;
+}
+
+bool Preprocess(const path& in_file, const path& out_file, const vector<path>& include_directories) {
+    ifstream input(in_file);
+    if (!input.is_open()) {
+        return false;
+    }
+    ofstream output(out_file);
+    size_t line_number = 0;
+    return Process(input, output, in_file, include_directories, line_number);
+}
 
 string GetFileContents(string file) {
     ifstream stream(file);
